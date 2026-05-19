@@ -20,24 +20,50 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             set -euo pipefail
-            
-            mkdir -p /opt/iconoclast-landing
-            cd /opt/iconoclast-landing
-            
-            # Sync files from GitHub
-            rsync -av --delete \
-              --exclude='.git' \
-              --exclude='.github' \
-              --exclude='node_modules' \
-              rsync://github.com/${{ github.repository }}.git/ . 2>/dev/null || true
-            
-            # Alternative: Clone/pull from Git
+
+            REPO_DIR=/opt/iconoclast-landing
+
+            mkdir -p "$REPO_DIR"
+            cd "$REPO_DIR"
+
+            # Pull latest code
             if [ ! -d .git ]; then
               git clone https://github.com/${{ github.repository }}.git .
             else
               git fetch origin main
               git reset --hard origin/main
             fi
-            
-            echo "✓ Deployment complete"
-            echo "Site available at: http://${{ secrets.DEPLOY_HOST }}"
+
+            # Detect web root
+            WEB_ROOT=""
+            if command -v nginx &>/dev/null; then
+              WEB_ROOT=$(nginx -T 2>/dev/null | grep -m1 '^\s*root ' | awk '{print $2}' | tr -d ';' || true)
+            fi
+            if [ -z "$WEB_ROOT" ] && command -v apache2ctl &>/dev/null; then
+              WEB_ROOT=$(apache2ctl -S 2>/dev/null | grep -m1 'DocumentRoot' | awk '{print $2}' || true)
+            fi
+            # Fallback to common locations
+            if [ -z "$WEB_ROOT" ]; then
+              for candidate in /var/www/html /var/www/iconoclast-landing /var/www/iconoclast-labs.co.za /usr/share/nginx/html; do
+                if [ -d "$candidate" ]; then
+                  WEB_ROOT="$candidate"
+                  break
+                fi
+              done
+            fi
+
+            if [ -z "$WEB_ROOT" ]; then
+              echo "ERROR: Could not detect web root. Set WEB_ROOT manually in this script."
+              exit 1
+            fi
+
+            echo "Syncing to web root: $WEB_ROOT"
+            rsync -av --delete \
+              --exclude='.git' \
+              --exclude='.github' \
+              "$REPO_DIR/" "$WEB_ROOT/"
+
+            # Reload web server to clear any caches
+            systemctl reload nginx 2>/dev/null || systemctl reload apache2 2>/dev/null || true
+
+            echo "✓ Deployment complete — $WEB_ROOT"
