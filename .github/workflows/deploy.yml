@@ -34,36 +34,7 @@ jobs:
               git reset --hard origin/main
             fi
 
-            # Debug: show where site files might be
-            echo "=== Web root candidates ==="
-            ls /var/www/ 2>/dev/null || echo "/var/www not found"
-            find /var/www /srv /home -name "index.html" 2>/dev/null || true
-            echo "=== nginx config root ==="
-            nginx -T 2>/dev/null | grep -E '^\s*root ' || echo "nginx not found or no root directive"
-            echo "==========================="
-
-            # Detect web root
-            WEB_ROOT=""
-            if command -v nginx &>/dev/null; then
-              WEB_ROOT=$(nginx -T 2>/dev/null | grep -m1 '^\s*root ' | awk '{print $2}' | tr -d ';' || true)
-            fi
-            if [ -z "$WEB_ROOT" ] && command -v apache2ctl &>/dev/null; then
-              WEB_ROOT=$(apache2ctl -S 2>/dev/null | grep -m1 'DocumentRoot' | awk '{print $2}' || true)
-            fi
-            # Fallback to common locations
-            if [ -z "$WEB_ROOT" ]; then
-              for candidate in /var/www/html /var/www/iconoclast-landing /var/www/iconoclast-labs.co.za /usr/share/nginx/html; do
-                if [ -d "$candidate" ]; then
-                  WEB_ROOT="$candidate"
-                  break
-                fi
-              done
-            fi
-
-            if [ -z "$WEB_ROOT" ]; then
-              echo "ERROR: Could not detect web root. Set WEB_ROOT manually in this script."
-              exit 1
-            fi
+            WEB_ROOT=/home/iclabs/iconoclast-landing
 
             echo "Syncing to web root: $WEB_ROOT"
             rsync -av --delete \
