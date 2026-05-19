@@ -34,6 +34,14 @@ jobs:
               git reset --hard origin/main
             fi
 
+            # Debug: show where site files might be
+            echo "=== Web root candidates ==="
+            ls /var/www/ 2>/dev/null || echo "/var/www not found"
+            find /var/www /srv /home -name "index.html" 2>/dev/null || true
+            echo "=== nginx config root ==="
+            nginx -T 2>/dev/null | grep -E '^\s*root ' || echo "nginx not found or no root directive"
+            echo "==========================="
+
             # Detect web root
             WEB_ROOT=""
             if command -v nginx &>/dev/null; then
