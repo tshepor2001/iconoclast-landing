@@ -1,0 +1,43 @@
+name: Deploy to Linode
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Linode
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            
+            mkdir -p /opt/iconoclast-landing
+            cd /opt/iconoclast-landing
+            
+            # Sync files from GitHub
+            rsync -av --delete \
+              --exclude='.git' \
+              --exclude='.github' \
+              --exclude='node_modules' \
+              rsync://github.com/${{ github.repository }}.git/ . 2>/dev/null || true
+            
+            # Alternative: Clone/pull from Git
+            if [ ! -d .git ]; then
+              git clone https://github.com/${{ github.repository }}.git .
+            else
+              git fetch origin main
+              git reset --hard origin/main
+            fi
+            
+            echo "✓ Deployment complete"
+            echo "Site available at: http://${{ secrets.DEPLOY_HOST }}"
